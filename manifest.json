@@ -5,9 +5,9 @@
     {
       "chipFamily": "ESP32",
       "ota": {
-        "md5": "00000000000000000000000000000000",
+        "md5": "74095b4e8cd6b33e0bc777112652b2ef",
         "url": "https://github.com/kgstorm/Balboa-GS100-with-VL260-topside/releases/download/v1.0.0/esp32-spa-1.0.0.bin",
-        "summary": "Initial release",
+        "summary": "See release notes for details.",
         "release_url": "https://github.com/kgstorm/Balboa-GS100-with-VL260-topside/releases/tag/v1.0.0"
       }
     }
