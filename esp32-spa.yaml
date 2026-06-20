@@ -1,9 +1,13 @@
 substitutions:
   UNITS: "F"  # F, or C
+  version: "1.0.0"  # overridden by CI on release
 
 esphome:
   name: esp32-spa
   friendly_name: esp32-spa
+  project:
+    name: "kgstorm.esp32-spa"
+    version: ${version}
 
 esp32:
   board: esp32dev
@@ -18,6 +22,8 @@ api:
 ota:
   - platform: esphome
     password: !secret ota_password
+  - platform: http_request
+    id: ota_http
 
 wifi:
   ssid: !secret wifi_ssid
@@ -29,6 +35,18 @@ wifi:
     password: !secret ap_password
 
 captive_portal:
+
+logger:
+
+http_request:
+  useragent: esphome/esp32-spa
+  timeout: 10s
+
+update:
+  - platform: http_request
+    name: "Firmware Update"
+    source: https://raw.githubusercontent.com/kgstorm/Balboa-GS100-with-VL260-topside/main/manifest.json
+    update_interval: 6h
 
 external_components:
   - source: esp32-spa
