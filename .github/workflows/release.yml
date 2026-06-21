@@ -55,7 +55,7 @@ jobs:
       - name: Locate firmware binary
         id: firmware
         run: |
-          BIN=$(find .esphome/build -name "firmware.bin" ! -path "*/bootloader/*" | head -1)
+          BIN=$(find .esphome/build -name "firmware.ota.bin" | head -1)
           echo "Found: $BIN"
           OUTNAME="esp32-spa-${{ steps.version.outputs.VERSION }}.bin"
           cp "$BIN" "$OUTNAME"
@@ -91,7 +91,7 @@ jobs:
                       "chipFamily": "ESP32",
                       "ota": {
                           "md5": md5,
-                          "url": f"{repo}/releases/download/{tag}/{filename}",
+                        "path": f"{repo}/releases/download/{tag}/{filename}",
                           "summary": f"See release notes for details.",
                           "release_url": f"{repo}/releases/tag/{tag}",
                       },
