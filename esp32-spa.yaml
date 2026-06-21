@@ -40,7 +40,10 @@ logger:
 
 http_request:
   useragent: esphome/esp32-spa
-  timeout: 10s
+  timeout: 20s
+  buffer_size_rx: 2048
+  buffer_size_tx: 1024
+  redirect_limit: 5
 
 update:
   - platform: http_request
