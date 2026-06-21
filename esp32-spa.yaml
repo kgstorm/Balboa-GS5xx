@@ -26,9 +26,6 @@ ota:
     id: ota_http
 
 wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
-
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
     ssid: "Esp32-Spa Fallback Hotspot"
@@ -48,7 +45,7 @@ http_request:
 update:
   - platform: http_request
     name: "Firmware Update"
-    source: https://raw.githubusercontent.com/kgstorm/Balboa-GS100-with-VL260-topside/main/manifest.json
+    source: https://kgstorm.github.io/Balboa-GS100-with-VL260-topside/firmware/manifest.json
     update_interval: 6h
 
 external_components:

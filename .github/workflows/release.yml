@@ -40,8 +40,6 @@ jobs:
           import os
           lines = [
               f'api_key: "{os.environ["API_KEY"]}"',
-              'wifi_ssid: "placeholder"',
-              'wifi_password: "placeholder"',
               f'ota_password: "{os.environ["OTA_PASSWORD"]}"',
               f'ap_password: "{os.environ["AP_PASSWORD"]}"',
           ]
@@ -75,13 +73,15 @@ jobs:
       - name: Update manifest.json
         run: |
           python3 - << 'PYEOF'
-          import json, os
+          import json, os, pathlib
 
           version = os.environ["VERSION"]
           tag = os.environ["TAG"]
           md5 = os.environ["MD5"]
           filename = os.environ["FILENAME"]
           repo = "https://github.com/kgstorm/Balboa-GS100-with-VL260-topside"
+
+          pathlib.Path("firmware").mkdir(parents=True, exist_ok=True)
 
           manifest = {
               "name": "kgstorm.esp32-spa",
@@ -91,14 +91,14 @@ jobs:
                       "chipFamily": "ESP32",
                       "ota": {
                           "md5": md5,
-                        "path": f"{repo}/releases/download/{tag}/{filename}",
+                          "path": filename,
                           "summary": f"See release notes for details.",
                           "release_url": f"{repo}/releases/tag/{tag}",
                       },
                   }
               ],
           }
-          with open("manifest.json", "w") as f:
+          with open("firmware/manifest.json", "w") as f:
               json.dump(manifest, f, indent=2)
               f.write("\n")
           PYEOF
@@ -108,12 +108,14 @@ jobs:
           MD5: ${{ steps.md5.outputs.MD5 }}
           FILENAME: ${{ steps.firmware.outputs.FILENAME }}
 
-      - name: Commit updated manifest.json to main
+      - name: Stage firmware files for Pages
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch origin main
-          git checkout main
-          git add manifest.json
-          git diff --cached --quiet || git commit -m "chore: update manifest.json for ${{ github.ref_name }}"
-          git push origin main
+          cp "${{ steps.firmware.outputs.FILENAME }}" "firmware/${{ steps.firmware.outputs.FILENAME }}"
+
+      - name: Publish firmware to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./firmware
+          destination_dir: firmware
+          keep_files: true
