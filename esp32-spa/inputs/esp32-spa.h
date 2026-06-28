@@ -47,8 +47,11 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
   // ---- Publish control ----
   uint32_t last_publish_time = 0;
   uint32_t last_published_value = 0;
+  uint8_t  last_published_bits = 24;
   bool first_publish = true;
   volatile bool last_frame_valid = false;  // becomes true when a frame passes the checksum and is published
+  volatile uint32_t completed_frame = 0;   // frame data saved by ISR pending loop() read
+  volatile uint8_t  completed_bits  = 0;   // bit count of completed_frame
 
   // Remember last decoded values for change detection
   int16_t last_measured_temp = -1;  // -1 = unknown
@@ -268,7 +271,7 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
     }
     portEXIT_CRITICAL(&spinlock_);
     if (partials > 0) {
-      ESP_LOGW(TAG, "Dropped %u partial/incomplete frames (gaps before 24 bits)", partials);
+      ESP_LOGW(TAG, "Dropped %u partial/incomplete frames (gaps before 21 bits)", partials);
     }
 
     // If no new frame, allow heartbeat publishes of last known value (only if last frame was valid)
@@ -309,22 +312,21 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
         return;
       }
 
-      uint32_t out = last_published_value & 0xFFFFFF;
+      uint32_t out   = last_published_value;
+      uint8_t  hbits = last_published_bits;
 
-      uint8_t p1 = (out >> 17) & 0x7F;  // top 7 bits
-      uint8_t p2 = (out >> 10) & 0x7F;  // next 7 bits
-      uint8_t p3 = (out >> 3)  & 0x7F;  // next 7 bits
-      uint8_t p4 = out & 0x7;          // last 3 bits
+      uint8_t p1 = (out >> (hbits - 7))  & 0x7F;
+      uint8_t p2 = (out >> (hbits - 14)) & 0x7F;
+      uint8_t p3 = (out >> (hbits - 21)) & 0x7F;
+      uint8_t p4 = (hbits >= 24) ? ((out >> (hbits - 24)) & 0x7) : 0;
 
-      // Decode/validate exactly like new frames
-      // Require p1 to match pattern 0xx0x00 (bits 6,3,1,0 must be zero)
-      // AND require the least-significant bit of p4 to be 0 (LSB of status nibble)
-      const uint8_t checksum_mask = 0x4B;  // 0b1001011 (mask bits 6,3,1,0)
-      const uint8_t checksum_val  = 0x00;  // expected zeros in masked bits
-      const uint8_t p4_mask = 0x1;        // require p4 LSB == 0
-      if ((p1 & checksum_mask) != checksum_val || (p4 & p4_mask) != 0) {
-        ESP_LOGW(TAG, "Heartbeat: stored frame fails checksum (p1 masked=0x%02X expected=0x%02X, p4_lsb=0x%X expected=0x0), not publishing",
-                static_cast<unsigned>(p1 & checksum_mask), static_cast<unsigned>(checksum_val), static_cast<unsigned>(p4 & p4_mask));
+      // Validate exactly like new frames
+      const uint8_t checksum_mask = 0x4B;
+      const uint8_t checksum_val  = 0x00;
+      if ((p1 & checksum_mask) != checksum_val ||
+          (hbits >= 24 && (p4 & 0x1) != 0)) {
+        ESP_LOGW(TAG, "Heartbeat: stored frame fails checksum (p1 masked=0x%02X, p4_lsb=0x%X, hbits=%u), not publishing",
+                static_cast<unsigned>(p1 & checksum_mask), static_cast<unsigned>(p4 & 0x1), static_cast<unsigned>(hbits));
         return;
       }
 
@@ -385,33 +387,37 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
 
     // Copy shared data under spinlock to avoid races with ISR
     portENTER_CRITICAL(&spinlock_);
-    uint32_t value = shift_reg;
+    uint32_t value = completed_frame;
+    uint8_t  nbits = completed_bits;
     frame_ready = false;
     portEXIT_CRITICAL(&spinlock_);
 
-    // Decode the frame and detect changes using decoded digits (not raw 24-bit value)
-    uint32_t out = value & 0xFFFFFF;
+    // Decode the frame: p1/p2/p3 are the top 21 bits (3 × 7-bit segments);
+    // p4 (status bits) only exists when nbits >= 24.
+    uint8_t p1 = (value >> (nbits - 7))  & 0x7F;
+    uint8_t p2 = (value >> (nbits - 14)) & 0x7F;
+    uint8_t p3 = (value >> (nbits - 21)) & 0x7F;
+    uint8_t p4 = (nbits >= 24) ? ((value >> (nbits - 24)) & 0x7) : 0;
 
-    // Split into parts
-    uint8_t p1 = (out >> 17) & 0x7F;  // top 7 bits
-    uint8_t p2 = (out >> 10) & 0x7F;  // next 7 bits
-    uint8_t p3 = (out >> 3)  & 0x7F;  // next 7 bits
-    uint8_t p4 = out & 0x7;          // last 3 bits
-
-    // Verify checksum to filter invalid frames
-    const uint8_t checksum_mask = 0x4B;  // 0b1001011 (mask bits 6,3,1,0)
-    const uint8_t checksum_val  = 0x00;  // expected zeros in masked bits
-    const uint8_t p4_mask = 0x1;        // require p4 LSB == 0
-    if ((p1 & checksum_mask) != checksum_val || (p4 & p4_mask) != 0) {
-      ESP_LOGW(TAG, "Frame fails checksum (p1 masked=0x%02X expected=0x%02X, p4_lsb=0x%X), ignoring",
-                static_cast<unsigned>(p1 & checksum_mask), static_cast<unsigned>(checksum_val), static_cast<unsigned>(p4 & p4_mask));
-      // Treat as non-existent frame
+    // Verify p1 checksum (always applied)
+    const uint8_t checksum_mask = 0x4B;  // 0b1001011 (mask bits 6,3,1,0 of p1)
+    const uint8_t checksum_val  = 0x00;
+    if ((p1 & checksum_mask) != checksum_val) {
+      ESP_LOGW(TAG, "Frame fails p1 checksum (p1 masked=0x%02X expected=0x%02X, nbits=%u), ignoring",
+                static_cast<unsigned>(p1 & checksum_mask), static_cast<unsigned>(checksum_val), static_cast<unsigned>(nbits));
+      last_frame_valid = false;
+      return;
+    }
+    // p4 LSB checksum only applies when the frame is long enough to include p4
+    if (nbits >= 24 && (p4 & 0x1) != 0) {
+      ESP_LOGW(TAG, "Frame fails p4 checksum (p4_lsb=0x%X, nbits=%u), ignoring",
+                static_cast<unsigned>(p4 & 0x1), static_cast<unsigned>(nbits));
       last_frame_valid = false;
       return;
     }
 
     // Small debug: log raw frame and parts
-    ESP_LOGD(TAG, "Frame received raw=0x%06X p1=0x%02X p2=0x%02X p3=0x%02X p4=0x%X", out, static_cast<unsigned>(p1), static_cast<unsigned>(p2), static_cast<unsigned>(p3), static_cast<unsigned>(p4));
+    ESP_LOGD(TAG, "Frame received raw=0x%06X bits=%u p1=0x%02X p2=0x%02X p3=0x%02X p4=0x%X", value, static_cast<unsigned>(nbits), static_cast<unsigned>(p1), static_cast<unsigned>(p2), static_cast<unsigned>(p3), static_cast<unsigned>(p4));
 
     // Decode the 7-seg patterns to digits
     int8_t digit2 = decode_7seg(p2);
@@ -636,6 +642,7 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
       ESP_LOGD(TAG, "Binary sensors updated: heater=%d pump=%d light=%d", pub_heater, pub_pump, pub_light);
 
       last_published_value = value;
+      last_published_bits  = nbits;
       last_publish_time = now;
       first_publish = false;
       portENTER_CRITICAL(&spinlock_);
@@ -690,14 +697,17 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
 
     uint32_t now_ccount = get_cycle_count();
     if (last_clock_ccount != 0 && (now_ccount - last_clock_ccount) > FRAME_GAP_CYCLES) {
-      // Detected frame gap — if we had a partial frame (bit_count != 0 and != 24), count it
-      if (bit_count != 0 && bit_count != 24) {
+      // Detected frame gap — save frame if it has enough bits, otherwise count as partial
+      if (bit_count >= 21) {
+        completed_frame = shift_reg;
+        completed_bits  = bit_count;
+        frame_ready     = true;
+      } else if (bit_count > 0) {
         partial_frame_count++;
       }
       // Start a new frame
       shift_reg = 0;
       bit_count = 0;
-      // Optional debug: keep ISR short
     }
     last_clock_ccount = now_ccount;
 
@@ -718,8 +728,11 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
     bit_count++;
 
     if (bit_count == 24) {
-      frame_ready = true;
-      bit_count = 0;
+      completed_frame = shift_reg;
+      completed_bits  = 24;
+      frame_ready     = true;
+      shift_reg       = 0;
+      bit_count       = 0;
     }
 
     portEXIT_CRITICAL_ISR(&spinlock_);
