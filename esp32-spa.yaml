@@ -1,6 +1,5 @@
 substitutions:
-  UNITS: "F"  # F, or C
-  version: "1.1.0"  # overridden by CI on release
+  version: "2.0" 
 
 esphome:
   name: esp32-spa
@@ -48,6 +47,12 @@ update:
     source: https://kgstorm.github.io/Balboa-GS100-with-VL260-topside/firmware/manifest.json
     update_interval: 6h
 
+globals:
+  - id: display_is_fahrenheit
+    type: bool
+    restore_value: true
+    initial_value: 'false'
+
 external_components:
   - source: esp32-spa
   
@@ -64,13 +69,13 @@ sensor:
     measured_temp:
       name: "Spa Measured Temp"
       id: spa_measured_temp
-      unit_of_measurement: "°${UNITS}"
+      unit_of_measurement: "°C"
       accuracy_decimals: 0
       device_class: temperature
     set_temp:
       name: "Spa Set Temp"
       id: spa_set_temp
-      unit_of_measurement: "°${UNITS}"
+      unit_of_measurement: "°C"
       accuracy_decimals: 0
       device_class: temperature
 
@@ -87,6 +92,23 @@ binary_sensor:
     parent_id: display_handler
     type: light
     name: "Spa Light Status"
+
+select:
+  - platform: template
+    name: "Spa Display Unit"
+    id: spa_display_unit
+    icon: "mdi:thermometer"
+    options:
+      - "°C"
+      - "°F"
+    initial_option: "°C"
+    restore_value: true
+    optimistic: true
+    on_value:
+      - lambda: |-
+          bool is_f = (x == "°F");
+          id(spa_measured_temp).set_unit_of_measurement(is_f ? "°F" : "°C");
+          id(spa_set_temp).set_unit_of_measurement(is_f ? "°F" : "°C");
 
 # ===== BUTTONS (GPIO outputs) =====
 output:
