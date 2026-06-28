@@ -67,7 +67,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            ${{ steps.firmware_ota.outputs.FILENAME }}
+            ${{ steps.firmware.outputs.FILENAME }}
             dist/spa-control-card.js
           generate_release_notes: true
           name: "Release ${{ github.ref_name }}"
