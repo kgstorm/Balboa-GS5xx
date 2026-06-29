@@ -40,126 +40,118 @@ class SpaControlCard extends HTMLElement {
       this._container.innerHTML = `
         <ha-card>
           <style>
-            /* CSS-driven side stacks positioned relative to the display circle. */
-            .circle { --side-width: 84px; --side-gap: 5px; --gap-from-circle: 16px; --circle-size: 260px; position:relative }
-            /* center vertically without transform to avoid creating a stacking context */
-            .spa-left, .spa-right { position:absolute; top:0; bottom:0; margin:auto 0; display:flex; flex-direction:column; gap:var(--side-gap); padding:6px 6px; box-sizing:border-box; width: var(--side-width); align-items:center; justify-content:center }
-            .spa-left { left: calc(-1 * (var(--side-width) + var(--gap-from-circle))); }
-            .spa-right { right: calc(-1 * (var(--side-width) + var(--gap-from-circle))); }
+            /* Outer wrapper enables CSS container queries scoped to actual card width */
+            #spa-card-outer { container-type: inline-size; container-name: spa-card; }
 
-            /* make each row fill container width and center its content */
-            .spa-left > div, .spa-right > div { width:100%; display:flex; align-items:center; justify-content:center; gap:8px }
-            /* hide the inline spacer divs used by older layouts */
-            .spa-left > div > div, .spa-right > div > div { display:none }
+            /* Flex row: [spa-left] [circle] [spa-right] — no overflow required */
+            #spa-row { display:flex; flex-direction:row; align-items:center; justify-content:center; gap:10px; width:100%; }
 
-            /* buttons should fill the available width of their container */
-            .side-button { position:relative; z-index:auto; width:100%; max-width:100%; box-sizing:border-box; height:44px; border-radius:6px; border:2px solid rgba(0,0,0,0.28); background:linear-gradient(var(--side-button-bg-start,#ffffff),var(--side-button-bg-end,#efefef)); color:var(--primary-text-color,#000); display:flex; align-items:center; justify-content:center; box-shadow:0 8px 18px rgba(0,0,0,0.10); transition: transform .12s ease, box-shadow .12s ease; font-weight:700; font-size:14px; text-align:center; padding:6px; overflow:visible }
+            /* Side panels as normal flex column items */
+            .spa-left, .spa-right { display:flex; flex-direction:column; gap:6px; box-sizing:border-box; width:84px; flex-shrink:0; align-items:stretch; justify-content:center; }
 
-            /* responsive tweaks */
-            @media (max-width: 520px) {
-              .circle { --circle-size: 200px; --side-width: 64px; --gap-from-circle: 10px; --side-gap: 4px; }
-              .circle .meas { font-size:42px; }
-              /* nudge the Set row up more to avoid overlapping the bottom icons */
-              .set-row { font-size:14px; margin-top:2px; transform: translateY(-24px); }
-              .inner-sensors { bottom:12px; width:56%; }
-              .side-button { height:38px; font-size:13px; padding:4px; }
-            }
-            @media (max-width: 420px) {
-              .circle { --side-width: 70px; --gap-from-circle: 10px; --side-gap: 5px; }
-            }
-
-            /* defined side buttons that visually form a panel around the circle */
-            .side-button { position:relative; z-index:auto; width:84px; height:44px; border-radius:6px; border:2px solid rgba(0,0,0,0.28); background:linear-gradient(var(--side-button-bg-start,#ffffff),var(--side-button-bg-end,#efefef)); color:var(--primary-text-color,#000); display:flex; align-items:center; justify-content:center; box-shadow:0 8px 18px rgba(0,0,0,0.10); transition: transform .12s ease, box-shadow .12s ease; font-weight:700; font-size:14px; text-align:center; padding:6px; overflow:visible }
-            .side-button.left { padding-right:10px; }
-            .side-button.right { padding-left:10px; }
-            /* only apply hover translation on devices that actually support hover (mouse) — prevents persistent hover state on touch devices */
+            /* Side buttons */
+            .side-button { width:100%; box-sizing:border-box; height:44px; border-radius:6px; border:2px solid rgba(0,0,0,0.15); background:var(--card-background-color,#fff); color:var(--primary-text-color,#000); display:flex; align-items:center; justify-content:center; box-shadow:0 4px 10px rgba(0,0,0,0.10); transition: transform .12s ease, box-shadow .12s ease; font-weight:700; font-size:13px; padding:4px; cursor:pointer; }
             @media (hover: hover) and (pointer: fine) {
-              .side-button:hover { transform: translateX(6px); box-shadow:0 14px 28px rgba(0,0,0,0.14); }
-              .side-button.right:hover { transform: translateX(-6px); }
+              .spa-left .side-button:hover { transform: translateX(3px); box-shadow:0 8px 20px rgba(0,0,0,0.14); }
+              .spa-right .side-button:hover { transform: translateX(-3px); box-shadow:0 8px 20px rgba(0,0,0,0.14); }
             }
-            .side-button ha-icon { color: inherit; }
+            .side-button.tap { transform: scale(0.95) !important; box-shadow:0 2px 6px rgba(0,0,0,0.10) !important; transition: transform .08s ease !important; }
+            .side-button ha-icon { color: inherit; pointer-events:none; }
 
-            /* transient press feedback: briefly apply 'tap' class which scales the button momentarily */
-            .side-button.tap { transform: scale(0.96) !important; box-shadow:0 6px 14px rgba(0,0,0,0.12) !important; transition: transform .08s ease, box-shadow .08s ease !important; }
-            .side-button.right.tap { transform: scale(0.96) !important; }
+            /* Circle */
+            .circle { --circle-size: 220px; position:relative; width:var(--circle-size); height:var(--circle-size); border-radius:50%; display:flex; flex-direction:column; align-items:center; justify-content:center; background:var(--ha-card-background,var(--paper-card-background-color,var(--card-background-color,#121212))); box-shadow: inset 0 0 0 6px var(--primary-color, #03A9F4); flex-shrink:0; }
 
-            /* Dark mode styles */
+            /* Mode label inside circle */
+            #mode-label { font-size:13px; font-weight:600; letter-spacing:0.06em; color:var(--primary-color,#03A9F4); text-transform:uppercase; height:16px; line-height:16px; margin-bottom:2px; opacity:1; transition:opacity .2s; transform:translateY(9px); }
+            #mode-label:empty { opacity:0; }
+            .circle .meas { transform:translateY(9px); }
+            #temp-group { display:flex; flex-direction:column; align-items:center; transform:translateY(-11px); }
+
+            /* Mode strip below the main row */
+            #mode-strip { display:flex; flex-direction:row; gap:8px; width:100%; margin-top:12px; box-sizing:border-box; }
+            .mode-button { flex:1; height:40px; border-radius:8px; border:2px solid rgba(0,0,0,0.15); background:var(--card-background-color,#fff); color:var(--primary-text-color,#000); font-weight:600; font-size:14px; cursor:pointer; transition: background .18s, color .18s, border-color .18s, box-shadow .18s; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+            .mode-button.tap { transform: scale(0.96) !important; transition: transform .08s ease !important; }
+
+            /* Container queries — respond to actual card width, not viewport width */
+            @container spa-card (max-width: 420px) {
+              .spa-left, .spa-right { width:70px; gap:5px; }
+              #spa-row { gap:6px; }
+              .circle { --circle-size: 196px; }
+              .circle .meas { font-size:46px !important; transform:translateY(0); }
+              .set-row { font-size:14px !important; margin-top:-8px !important; }
+              #temp-group { transform:translateY(-6px); }
+              #mode-label { transform:translateY(0); }
+              .side-button { height:38px; font-size:12px; }
+              .mode-button { height:36px; font-size:13px; }
+            }
+            @container spa-card (max-width: 340px) {
+              .spa-left, .spa-right { width:58px; gap:4px; }
+              #spa-row { gap:5px; }
+              .circle { --circle-size: 166px; }
+              .circle .meas { font-size:34px !important; transform:translateY(0); }
+              .set-row { font-size:12px !important; margin-top:-2px !important; }
+              #temp-group { transform:translateY(-7px); }
+              #mode-label { transform:translateY(0); }
+              .side-button { height:32px; font-size:11px; }
+              .inner-sensors ha-icon { width:22px !important; height:22px !important; }
+              .inner-sensors { bottom:25px !important; width:58% !important; }
+              .mode-button { height:30px; font-size:12px; }
+            }
+
+            /* Dark mode */
             @media (prefers-color-scheme: dark) {
-              .side-button { border-color: rgba(255,255,255,0.06); background: linear-gradient(#2a2a2a,#1d1d1d); box-shadow: 0 6px 14px rgba(0,0,0,0.6); color: var(--primary-text-color,#fff); }
-              .side-button:hover { box-shadow: 0 10px 20px rgba(0,0,0,0.6); }
+              .side-button { border-color:rgba(255,255,255,0.10); background:linear-gradient(#2a2a2a,#1d1d1d); box-shadow:0 4px 10px rgba(0,0,0,0.5); color:var(--primary-text-color,#fff); }
+              .mode-button { border-color:rgba(255,255,255,0.10); background:linear-gradient(#2a2a2a,#1d1d1d); color:var(--primary-text-color,#fff); }
             }
 
-            /* buttons are simple rectangular controls; previous mask-based cutouts removed */
-            .side-button::after { display: none; }
-
-            /* slight bevel to blend with circle */
-            .circle { background:linear-gradient(#ffffff,#fafafa); box-shadow: inset 0 0 0 6px var(--primary-color, #03A9F4); position:relative; width:var(--circle-size,260px); height:var(--circle-size,260px); border-radius:50%; }
-
-            /* optional card title */
-            .card-title { font-size:18px; font-weight:600; margin-bottom:8px; text-align:center; color:var(--primary-text-color); }
-
-            ha-card, #big { overflow: visible }
+            /* Optional card title */
+            .card-title { font-size:18px; font-weight:600; margin-bottom:10px; text-align:center; color:var(--primary-text-color); }
           </style>
-          <div style="display:flex;align-items:center;justify-content:center;padding:18px">
-            <div id="big" style="display:flex;flex-direction:column;align-items:center;justify-content:center">
+          <div id="spa-card-outer" style="padding:14px 10px;box-sizing:border-box">
+            <div id="big" style="display:flex;flex-direction:column;align-items:center">
               <div id="card_title" class="card-title" style="display:none"></div>
-              <div class="circle" style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--paper-card-background-color);box-shadow: inset 0 0 0 6px var(--primary-color, #03A9F4);">                <div class="meas" style="font-size:60px;font-weight:700">—</div>
-                <div class="set-row" style="margin-top:12px;font-size:18px;color:var(--secondary-text-color)"><span class="set-label">Set</span>: <span class="set">—</span></div>
-                <div id="config_msg" style="margin-top:6px;font-size:12px;color:var(--error-color)"></div>
-
-                <div class="inner-sensors" style="position:absolute;left:50%;bottom:18px;transform:translateX(-50%);width:48%;display:flex;justify-content:space-between;align-items:flex-end;pointer-events:auto">
-                  <div class="sensor heater" role="img" aria-label="Heater" style="display:flex;align-items:center;justify-content:center;">
-                    <ha-icon id="heater_icon" icon="mdi:fire" style="width:32px;height:32px;color:var(--disabled-text-color,#bdbdbd);transform:translateY(-8px);transition:transform .18s ease,filter .18s ease,color .18s ease"></ha-icon>
-                  </div>
-                  <div class="sensor pump" role="img" aria-label="Pump" style="display:flex;align-items:center;justify-content:center;">
-                    <ha-icon id="pump_icon" icon="mdi:fan" style="width:34px;height:34px;color:var(--disabled-text-color,#bdbdbd);transform:translateY(12px);transition:transform .18s ease,filter .18s ease,color .18s ease"></ha-icon>
-                  </div>
-                  <div class="sensor lights" role="img" aria-label="Lights" style="display:flex;align-items:center;justify-content:center;">
-                    <ha-icon id="lights_icon" icon="mdi:string-lights" style="width:32px;height:32px;color:var(--disabled-text-color,#bdbdbd);transform:translateY(-8px);transition:transform .18s ease,filter .18s ease,color .18s ease"></ha-icon>
-                  </div>
-                </div>
-
-                
-                <!-- Left side stack: Set Low (top), Temp Down (middle), Lights (bottom) -->
+              <div id="spa-row">
+                <!-- Left: Set Low, Temp Down, Lights -->
                 <div class="spa-left">
-
-                  <div style="display:flex;align-items:center;gap:8px">
-                    <div style="flex:0 0 10px"></div>
-                    <button id="set_low_btn" class="side-button left" title="Set Low">Set Low</button>
-                  </div>
-
-                  <div style="display:flex;align-items:center;gap:8px">
-                    <div style="flex:0 0 10px"></div>
-                    <button id="temp_down_btn" class="side-button left" title="Temp Down"><ha-icon icon="mdi:chevron-down" style="vertical-align:middle"></ha-icon></button>
-                  </div>
-
-                  <div style="display:flex;align-items:center;gap:8px">
-                    <div style="flex:0 0 10px"></div>
-                    <button id="lights_btn" class="side-button left" title="Lights"><ha-icon icon="mdi:lightbulb" style="vertical-align:middle"></ha-icon></button>
-                  </div>
-
+                  <button id="set_low_btn" class="side-button" title="Set Low" style="display:none">Set Low</button>
+                  <button id="temp_down_btn" class="side-button" title="Temp Down"><ha-icon icon="mdi:chevron-down"></ha-icon></button>
+                  <button id="lights_btn" class="side-button" title="Lights"><ha-icon icon="mdi:lightbulb"></ha-icon></button>
                 </div>
 
-                <!-- Right side stack: Set High (top), Temp Up (middle), Pump (bottom) -->
+                <!-- Circle -->
+                <div class="circle">
+                  <div id="temp-group">
+                    <div id="mode-label"></div>
+                    <div class="meas" style="font-size:60px;font-weight:700">—</div>
+                    <div class="set-row" style="margin-top:0;font-size:18px;color:var(--secondary-text-color)"><span class="set-label">Set</span>: <span class="set">—</span></div>
+                    <div id="config_msg" style="margin-top:6px;font-size:12px;color:var(--error-color)"></div>
+                  </div>
+                  <div class="inner-sensors" style="position:absolute;left:50%;bottom:18px;transform:translateX(-50%);width:48%;display:flex;justify-content:space-between;align-items:flex-end;pointer-events:auto">
+                    <div class="sensor heater" role="img" aria-label="Heater" style="display:flex;align-items:center;justify-content:center;">
+                      <ha-icon id="heater_icon" icon="mdi:fire" style="width:32px;height:32px;color:var(--disabled-text-color,#bdbdbd);transform:translateY(-8px);transition:transform .18s ease,filter .18s ease,color .18s ease"></ha-icon>
+                    </div>
+                    <div class="sensor pump" role="img" aria-label="Pump" style="display:flex;align-items:center;justify-content:center;">
+                      <ha-icon id="pump_icon" icon="mdi:fan" style="width:34px;height:34px;color:var(--disabled-text-color,#bdbdbd);transform:translateY(12px);transition:transform .18s ease,filter .18s ease,color .18s ease"></ha-icon>
+                    </div>
+                    <div class="sensor lights" role="img" aria-label="Lights" style="display:flex;align-items:center;justify-content:center;">
+                      <ha-icon id="lights_icon" icon="mdi:string-lights" style="width:32px;height:32px;color:var(--disabled-text-color,#bdbdbd);transform:translateY(-8px);transition:transform .18s ease,filter .18s ease,color .18s ease"></ha-icon>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Right: Set High, Temp Up, Pump -->
                 <div class="spa-right">
-
-                  <div style="display:flex;align-items:center;gap:8px">
-                    <button id="set_high_btn" class="side-button right" title="Set High">Set High</button>
-                    <div style="flex:0 0 10px"></div>
-                  </div>
-
-                  <div style="display:flex;align-items:center;gap:8px">
-                    <button id="temp_up_btn" class="side-button right" title="Temp Up"><ha-icon icon="mdi:chevron-up" style="vertical-align:middle"></ha-icon></button>
-                    <div style="flex:0 0 10px"></div>
-                  </div>
-
-                  <div style="display:flex;align-items:center;gap:8px">
-                    <button id="pump_btn" class="side-button right" title="Pump"><ha-icon icon="mdi:fan" style="vertical-align:middle"></ha-icon></button>
-                    <div style="flex:0 0 10px"></div>
-                  </div>
-
+                  <button id="set_high_btn" class="side-button" title="Set High" style="display:none">Set High</button>
+                  <button id="temp_up_btn" class="side-button" title="Temp Up"><ha-icon icon="mdi:chevron-up"></ha-icon></button>
+                  <button id="pump_btn" class="side-button" title="Pump"><ha-icon icon="mdi:fan"></ha-icon></button>
                 </div>
+              </div>
 
+              <!-- Mode strip: Eco / Standard / Sleep -->
+              <div id="mode-strip">
+                <button id="eco_btn" class="mode-button" title="Economy">Economy</button>
+                <button id="standard_btn" class="mode-button" title="Standard">Standard</button>
+                <button id="sleep_btn" class="mode-button" title="Sleep">Sleep</button>
               </div>
             </div>
           </div>
@@ -204,6 +196,9 @@ class SpaControlCard extends HTMLElement {
     if (!this.config.pump_button_entity) this.config.pump_button_entity = `button.${this._device_norm}_spa_pumps`;
     if (!this.config.lights_button_entity) this.config.lights_button_entity = `button.${this._device_norm}_spa_lights`;
 
+    // spa mode sensor (tracks current heating mode: eco / standard / sleep)
+    if (!this.config.mode_entity) this.config.mode_entity = `sensor.${this._device_norm}_spa_mode`;
+
     // initial update
     this._update();
 
@@ -229,11 +224,18 @@ class SpaControlCard extends HTMLElement {
     setupBtn('#set_low_btn', this._onSetLow);
     setupBtn('#pump_btn', this._onPump);
     setupBtn('#lights_btn', this._onLights);
+    setupBtn('#eco_btn', this._onEco);
+    setupBtn('#standard_btn', this._onStandard);
+    setupBtn('#sleep_btn', this._onSleep);
 
     const setHighEl = this.querySelector('#set_high_btn');
     const setLowEl = this.querySelector('#set_low_btn');
     if (setHighEl) setHighEl.style.display = (typeof this.config.high_setting !== 'undefined') ? 'flex' : 'none';
     if (setLowEl) setLowEl.style.display = (typeof this.config.low_setting !== 'undefined') ? 'flex' : 'none';
+
+    // show/hide mode strip based on config (default: visible)
+    const modeStripEl = this.querySelector('#mode-strip');
+    if (modeStripEl) modeStripEl.style.display = (this.config.show_mode_buttons !== false) ? 'flex' : 'none';
 
     // layout handled by CSS (no JS cutouts required).
   }
@@ -302,6 +304,24 @@ class SpaControlCard extends HTMLElement {
         lightsIcon.style.color = isOn ? '#ffd54f' : offColor; // warm yellow when on
         lightsIcon.style.filter = isOn ? 'drop-shadow(0 0 10px rgba(255,213,79,0.9))' : 'none';
       }
+    }
+
+    // Mode button active state — highlight whichever heating mode is currently active
+    const modeState = getState(this.config.mode_entity);
+    const modeVal = modeState && modeState.state !== 'unknown' && modeState.state !== 'unavailable'
+      ? modeState.state.toLowerCase() : '';
+    const ecoBtn = this.querySelector('#eco_btn');
+    const stdBtn = this.querySelector('#standard_btn');
+    const sleepBtn = this.querySelector('#sleep_btn');
+    if (ecoBtn) ecoBtn.classList.toggle('active', this._modeMatches(modeVal, 'eco'));
+    if (stdBtn) stdBtn.classList.toggle('active', this._modeMatches(modeVal, 'standard'));
+    if (sleepBtn) sleepBtn.classList.toggle('active', this._modeMatches(modeVal, 'sleep'));
+    const modeLabelEl = this.querySelector('#mode-label');
+    if (modeLabelEl) {
+      if (this._modeMatches(modeVal, 'eco')) modeLabelEl.textContent = 'Economy';
+      else if (this._modeMatches(modeVal, 'sleep')) modeLabelEl.textContent = 'Sleep';
+      else if (this._modeMatches(modeVal, 'standard')) modeLabelEl.textContent = 'Std';
+      else modeLabelEl.textContent = '';
     }
 
     // reflect busy state in controls (disable while adjusting set points)
@@ -443,8 +463,44 @@ class SpaControlCard extends HTMLElement {
     this._update();
   }
 
+  // Returns true if a mode state string matches the given target ('eco', 'standard', 'sleep')
+  _modeMatches(stateStr, target) {
+    if (target === 'eco')      return /economy|eco|^ec$/.test(stateStr);
+    if (target === 'standard') return /std|standard|^st$/.test(stateStr);
+    if (target === 'sleep')    return /sleep|^sl$|slp/.test(stateStr);
+    return false;
+  }
+
+  // Set heating mode by pressing Warm then cycling Light until the target mode appears.
+  // Cycle order (manufacturer confirmed): St -> Ec -> SL -> St
+  async _setToMode(targetMode) {
+    if (this._busy) return;
+    this._busy = true;
+    this._update();
+    try {
+      // Step 1: press Warm to trigger the set-temp flash (enters mode-select state)
+      await this._hass.callService('button', 'press', { entity_id: this.config.temp_up_entity });
+      await this._sleep(450);
+
+      // Step 2: repeatedly press Light to cycle through modes until target matches
+      for (let i = 0; i < 8; i++) {
+        await this._hass.callService('button', 'press', { entity_id: this.config.lights_button_entity });
+        await this._sleep(700); // allow firmware to detect stable mode code and HA to propagate
+        const ms = this._hass.states[this.config.mode_entity];
+        if (ms && this._modeMatches(ms.state.toLowerCase(), targetMode)) break;
+        if (i === 7) this._showConfigMessage('Could not set mode — check spa display');
+      }
+    } catch (e) { console.warn('spa-control-card: _setToMode failed', e); }
+    this._busy = false;
+    this._update();
+  }
+
+  async _onEco()      { await this._setToMode('eco'); }
+  async _onStandard() { await this._setToMode('standard'); }
+  async _onSleep()    { await this._setToMode('sleep'); }
+
   getCardSize() {
-    return 3;
+    return 4;
   }
 
   /* Lovelace editor integration: provide a simple schema-based editor using <ha-form>
@@ -477,6 +533,8 @@ class SpaControlCard extends HTMLElement {
           const low = this.querySelector('#low_setting');
           const lowVal = typeof this._config.low_setting !== 'undefined' ? String(this._config.low_setting) : '';
           if (low && document.activeElement !== low && low.value !== lowVal) low.value = lowVal;
+          const modeToggle = this.querySelector('#show_mode_buttons');
+          if (modeToggle) modeToggle.checked = this._config.show_mode_buttons !== false;
         }
         render() {
           this.innerHTML = '';
@@ -515,16 +573,38 @@ class SpaControlCard extends HTMLElement {
           const highField = makeField('High setting (optional)', 'high_setting', 'number', false);
           const lowField = makeField('Low setting (optional)', 'low_setting', 'number', false);
 
+          // Toggle: show/hide mode buttons
+          const modeToggleWrapper = document.createElement('div');
+          modeToggleWrapper.style.display = 'flex';
+          modeToggleWrapper.style.alignItems = 'center';
+          modeToggleWrapper.style.gap = '8px';
+          modeToggleWrapper.style.marginTop = '4px';
+          const modeToggleInput = document.createElement('input');
+          modeToggleInput.id = 'show_mode_buttons';
+          modeToggleInput.type = 'checkbox';
+          modeToggleInput.style.width = '18px';
+          modeToggleInput.style.height = '18px';
+          modeToggleInput.style.cursor = 'pointer';
+          const modeToggleLabel = document.createElement('label');
+          modeToggleLabel.htmlFor = 'show_mode_buttons';
+          modeToggleLabel.textContent = 'Show Economy / Standard / Sleep mode buttons';
+          modeToggleLabel.style.fontSize = '13px';
+          modeToggleLabel.style.cursor = 'pointer';
+          modeToggleWrapper.appendChild(modeToggleInput);
+          modeToggleWrapper.appendChild(modeToggleLabel);
+
           container.appendChild(devField.wrapper);
           container.appendChild(titleField.wrapper);
           container.appendChild(highField.wrapper);
           container.appendChild(lowField.wrapper);
+          container.appendChild(modeToggleWrapper);
 
           // populate values
           devField.input.value = this._config.device_name || '';
           titleField.input.value = this._config.title || '';
           highField.input.value = typeof this._config.high_setting !== 'undefined' ? this._config.high_setting : '';
           lowField.input.value = typeof this._config.low_setting !== 'undefined' ? this._config.low_setting : '';
+          modeToggleInput.checked = this._config.show_mode_buttons !== false;
 
           // dispatch change events (debounced)
           let timeout = null;
@@ -536,6 +616,7 @@ class SpaControlCard extends HTMLElement {
               title: titleField.input.value !== '' ? titleField.input.value : undefined,
               high_setting: highField.input.value !== '' ? Number(highField.input.value) : undefined,
               low_setting: lowField.input.value !== '' ? Number(lowField.input.value) : undefined,
+              show_mode_buttons: modeToggleInput.checked,
             };
             this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: cfg } }));
           };
@@ -547,6 +628,7 @@ class SpaControlCard extends HTMLElement {
           [devField.input, titleField.input, highField.input, lowField.input].forEach(i => {
             i.addEventListener('input', schedule);
           });
+          modeToggleInput.addEventListener('change', dispatch);
 
           this.appendChild(container);
         }
@@ -557,7 +639,7 @@ class SpaControlCard extends HTMLElement {
   }
 
   static getStubConfig() {
-    return { type: 'custom:spa-control-card', device_name: '', title: '', high_setting: undefined, low_setting: undefined };
+    return { type: 'custom:spa-control-card', device_name: '', title: '', high_setting: undefined, low_setting: undefined, show_mode_buttons: true };
   }
 }
 
