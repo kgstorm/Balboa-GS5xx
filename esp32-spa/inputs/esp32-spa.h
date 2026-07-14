@@ -28,11 +28,11 @@ static const uint8_t CLK_PIN  = 35;  // Clock (input-only)
 static const uint8_t DATA_PIN = 34;  // Data (input-only)
 
 // Button output pins used to inject presses. These are boot-safe GPIOs and match
-// the values in `esp32-spa.yaml` (Warm=25, Cool=26, Lights=27, Pumps=32).
-#define PIN_WRITE_BTN1 25  // Warm
-#define PIN_WRITE_BTN2 26  // Cool
-#define PIN_WRITE_BTN3 27  // Lights
-#define PIN_WRITE_PUMP 32  // Pumps
+// the values in `esp32-spa.yaml` (Lights=25, Temp=26, Jets=27, Blower=32).
+#define PIN_WRITE_BTN1 25  // Lights
+#define PIN_WRITE_BTN2 26  // Temp
+#define PIN_WRITE_BTN3 27  // Jets
+#define PIN_WRITE_PUMP 32  // Blower
 
 namespace esp32_spa {
 
@@ -124,7 +124,7 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
 
   // --- Auto-refresh set-temp logic ---
   // When we capture & publish the set temp, reset this timer. If no set-temp is captured
-  // for SET_FORCE_INTERVAL_MS milliseconds we auto-press COOL once to force the tub to
+  // for SET_FORCE_INTERVAL_MS milliseconds we auto-press TEMP once to force the tub to
   // display and send the set temperature. We also update the timer when we auto-press.
   uint32_t last_set_sent_time_ms = 0;
   static constexpr uint32_t SET_FORCE_INTERVAL_MS = 6u * 60u * 60u * 1000u;  // 6 hours
@@ -245,49 +245,51 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
     // Initialize auto-refresh timer to avoid an immediate forced press on boot
     last_set_sent_time_ms = esphome::millis();
 
-    // Ensure COOL button pin is setup as an output (harmless if balboa_custom also configures it)
+    // Ensure TEMP and LIGHT button pins are set up as outputs (harmless if yaml also configures them)
     gpio_set_direction((gpio_num_t)PIN_WRITE_BTN2, GPIO_MODE_OUTPUT);
     gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0);
+    gpio_set_direction((gpio_num_t)PIN_WRITE_BTN1, GPIO_MODE_OUTPUT);
+    gpio_set_level((gpio_num_t)PIN_WRITE_BTN1, 0);
 
-    // Press COOL/LIGHTS three times after boot to capture the mode and cycle it back to the original setting.
+    // Press TEMP/LIGHTS three times after boot to capture the mode and cycle it back to the original setting.
     // First combo starts at 5.0s. Update the last_set_sent_time when the first temp press begins.
-    this->set_timeout("boot_press_cool_on", 5000, [this]() {
-      ESP_LOGI(TAG, "Boot: auto-pressing COOL to initialize set temp");
+    this->set_timeout("boot_press_temp_on", 5000, [this]() {
+      ESP_LOGI(TAG, "Boot: auto-pressing TEMP to initialize set temp");
       gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 1);
       last_set_sent_time_ms = esphome::millis();
     });
-    this->set_timeout("boot_press_cool_off", 5200, []() {
+    this->set_timeout("boot_press_temp_off", 5200, []() {
       gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0);
     });
     this->set_timeout("boot_press_light_on",  6700, []() {
-      gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 1);
+      gpio_set_level((gpio_num_t)PIN_WRITE_BTN1, 1);
     });
     this->set_timeout("boot_press_light_off", 6900, []() {
-      gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 0);
+      gpio_set_level((gpio_num_t)PIN_WRITE_BTN1, 0);
     });
-    this->set_timeout("boot_press_cool_on_2", 8000, []() {
+    this->set_timeout("boot_press_temp_on_2", 8000, []() {
       gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 1);
     });
-    this->set_timeout("boot_press_cool_off_2", 8200, []() {
+    this->set_timeout("boot_press_temp_off_2", 8200, []() {
       gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0);
     });
     this->set_timeout("boot_press_light_on_2",  9700, []() {
-      gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 1);
+      gpio_set_level((gpio_num_t)PIN_WRITE_BTN1, 1);
     });
     this->set_timeout("boot_press_light_off_2", 9900, []() {
-      gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 0);
+      gpio_set_level((gpio_num_t)PIN_WRITE_BTN1, 0);
     });
-    this->set_timeout("boot_press_cool_on_3", 11000, []() {
+    this->set_timeout("boot_press_temp_on_3", 11000, []() {
       gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 1);
     });
-    this->set_timeout("boot_press_cool_off_3", 11200, []() {
+    this->set_timeout("boot_press_temp_off_3", 11200, []() {
       gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0);
     });
     this->set_timeout("boot_press_light_on_3",  12700, []() {
-      gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 1);
+      gpio_set_level((gpio_num_t)PIN_WRITE_BTN1, 1);
     });
     this->set_timeout("boot_press_light_off_3", 12900, []() {
-      gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 0);
+      gpio_set_level((gpio_num_t)PIN_WRITE_BTN1, 0);
     });
   }
 
@@ -312,24 +314,24 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
     if (!frame_ready) {
       bool heartbeat_due = (now - last_publish_time >= HEARTBEAT_MS);
 
-      // If the set-temp hasn't been captured for a while, run three COOL/LIGHTS combos to
+      // If the set-temp hasn't been captured for a while, run three TEMP/LIGHTS combos to
       // capture the current mode and cycle it back to the original setting.
       if ((now - last_set_sent_time_ms) >= SET_FORCE_INTERVAL_MS) {
-        ESP_LOGI(TAG, "No set-temp captured for %ums — auto-pressing COOL to refresh set temp", static_cast<unsigned>(now - last_set_sent_time_ms));
-        // Activate the physical COOL press (use balboa pin macro)
+        ESP_LOGI(TAG, "No set-temp captured for %ums — auto-pressing TEMP to refresh set temp", static_cast<unsigned>(now - last_set_sent_time_ms));
+        // Activate the physical TEMP press (use balboa pin macro)
         gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 1);
         // Ensure we release it after a short duration (mirror existing press timing)
-        this->set_timeout("auto_press_cool", 200, [](){ gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0); });
-        this->set_timeout("auto_press_light_on",  1700, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 1); });
-        this->set_timeout("auto_press_light_off", 1900, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 0); });
-        this->set_timeout("auto_press_cool_2", 3000, [](){ gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 1); });
-        this->set_timeout("auto_press_cool_off_2", 3200, [](){ gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0); });
-        this->set_timeout("auto_press_light_on_2", 4700, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 1); });
-        this->set_timeout("auto_press_light_off_2", 4900, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 0); });
-        this->set_timeout("auto_press_cool_3", 6000, [](){ gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 1); });
-        this->set_timeout("auto_press_cool_off_3", 6200, [](){ gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0); });
-        this->set_timeout("auto_press_light_on_3", 7700, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 1); });
-        this->set_timeout("auto_press_light_off_3", 7900, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 0); });
+        this->set_timeout("auto_press_temp", 200, [](){ gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0); });
+        this->set_timeout("auto_press_light_on",  1700, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN1, 1); });
+        this->set_timeout("auto_press_light_off", 1900, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN1, 0); });
+        this->set_timeout("auto_press_temp_2", 3000, [](){ gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 1); });
+        this->set_timeout("auto_press_temp_off_2", 3200, [](){ gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0); });
+        this->set_timeout("auto_press_light_on_2", 4700, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN1, 1); });
+        this->set_timeout("auto_press_light_off_2", 4900, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN1, 0); });
+        this->set_timeout("auto_press_temp_3", 6000, [](){ gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 1); });
+        this->set_timeout("auto_press_temp_off_3", 6200, [](){ gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0); });
+        this->set_timeout("auto_press_light_on_3", 7700, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN1, 1); });
+        this->set_timeout("auto_press_light_off_3", 7900, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN1, 0); });
         // Update timer to avoid repeated presses
         last_set_sent_time_ms = now;
         // Also reset heartbeat timing so we don't immediately publish stale data

@@ -1,4 +1,4 @@
-# Balboa-GS100-with-VL260-topside
+# Balboa-GS5xx
 
 <p align="center">
   <img src="docs/BalboaGS100Controller.png" width="45%" alt="Balboa GS100 Controller" />
@@ -7,7 +7,7 @@
 
 ## Description
 
-This project adds an Wifi module to a Balboa Hot Tub. This project has been tested with a few Balboa control boards and seems to work with any VL200 series or VL400 series topside controllers. I imagine any 3 or 4-button Balboa topside controllers with RJ45 connectors would have a very similar setup. 
+This project adds a Wi-Fi module to Balboa GS5xx-based hot tubs that use a 4-button topside layout with Temp, Blower, Jets, and Lights.
 
 ---
 
@@ -54,13 +54,13 @@ ESP32 DEVKIT V1 GPIO assignments:
 | Spa RJ45 pin | Function | Wiring diagram color | GPIO pin |
 |---:|---|---|---|
 | 1 | VIN | red | VIN |
-| 2 | Warm Button | orange | 25 |
-| 3 | Light Button | purple | 27 |
+| 2 | Light Button | orange | 25 |
+| 3 | Jets Button | purple | 27 |
 | 4 | GND | black | GND |
 | 5 | Display Data | green | 34 |
 | 6 | Clock | yellow | 35 |
-| 7 | Jets Button | blue | 32 |
-| 8 | Cool Button | lime green | 26 |
+| 7 | Blower Button | blue | 32 |
+| 8 | Temp Button | lime green | 26 |
 
 ---
 
@@ -102,7 +102,7 @@ If the card doesn't appear immediately, try a hard-refresh (Ctrl/Cmd+Shift+R) or
 
 This integration exposes a `text_sensor` for the current heating mode (`sensor.<device_name>_spa_mode`). The possible states are **Standard**, **Economy**, and **Sleep**. Standard mode turns the heater and circulation pump on whenever the measured temperature drops below the set temperature. Economy only heats when the circulation pumps are programmed to run. Sleep mode also only heats when the circulation pumps are programmed to run, but also only heats to ~10C/20F below the set temperature. 
 
-The mode is detected by reading the 7-segment display characters `St`, `Ec`, or `SL` that the Balboa controller briefly shows during mode selection. The device automatically reads the current mode on boot (and every 30 minutes) by pressing the Cool button followed by the Light button.
+The mode is detected by reading the 7-segment display characters `St`, `Ec`, or `SL` that the Balboa controller briefly shows during mode selection. The device automatically reads the current mode on boot (and every 30 minutes) by pressing the Temp button followed by the Light button.
 
 
 ### Example Home Assistant automation (mobile push notification)

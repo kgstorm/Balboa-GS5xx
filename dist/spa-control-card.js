@@ -15,7 +15,7 @@ cold_temp: 98
 
 Notes:
 - The editor supports explicit entity names for each entity (if automatic detection fails for your installation).
-- If scripts exist (e.g., script.spa_set_hot), the card will attempt to call them for Set Hot/Cold. Otherwise it will press the warm/cool button repeatedly until the set temp matches or a safety limit is reached.
+- If scripts exist (e.g., script.spa_set_hot), the card will attempt to call them for Set Hot/Cold. Otherwise it will press temp buttons until the set temp matches or a safety limit is reached.
 - This card attempts to infer entity IDs from the `esp_device` config by trying a few common patterns. If you see warnings in the UI, fill in the explicit entity id fields in the editor.
 
 */
@@ -111,10 +111,10 @@ class SpaControlCard extends HTMLElement {
             <div id="big" style="display:flex;flex-direction:column;align-items:center">
               <div id="card_title" class="card-title" style="display:none"></div>
               <div id="spa-row">
-                <!-- Left: Set Low, Temp Down, Lights -->
+                <!-- Left: Set Low, Blower, Lights -->
                 <div class="spa-left">
                   <button id="set_low_btn" class="side-button" title="Set Low" style="display:none">Set Low</button>
-                  <button id="temp_down_btn" class="side-button" title="Temp Down"><ha-icon icon="mdi:chevron-down"></ha-icon></button>
+                  <button id="blower_btn" class="side-button" title="Blower"><ha-icon icon="mdi:weather-windy"></ha-icon></button>
                   <button id="lights_btn" class="side-button" title="Lights"><ha-icon icon="mdi:lightbulb"></ha-icon></button>
                 </div>
 
@@ -139,11 +139,11 @@ class SpaControlCard extends HTMLElement {
                   </div>
                 </div>
 
-                <!-- Right: Set High, Temp Up, Pump -->
+                <!-- Right: Set High, Temp, Jets -->
                 <div class="spa-right">
                   <button id="set_high_btn" class="side-button" title="Set High" style="display:none">Set High</button>
-                  <button id="temp_up_btn" class="side-button" title="Temp Up"><ha-icon icon="mdi:chevron-up"></ha-icon></button>
-                  <button id="pump_btn" class="side-button" title="Pump"><ha-icon icon="mdi:fan"></ha-icon></button>
+                  <button id="temp_up_btn" class="side-button" title="Temp"><ha-icon icon="mdi:thermometer"></ha-icon></button>
+                  <button id="pump_btn" class="side-button" title="Jets"><ha-icon icon="mdi:fan"></ha-icon></button>
                 </div>
               </div>
 
@@ -188,12 +188,13 @@ class SpaControlCard extends HTMLElement {
     if (!this.config.pump_entity) this.config.pump_entity = `binary_sensor.${this._device_norm}_spa_pump_status`;
     if (!this.config.light_entity) this.config.light_entity = `binary_sensor.${this._device_norm}_spa_light_status`;
 
-    // sensible defaults for temp buttons (warm/cool)
-    if (!this.config.temp_up_entity) this.config.temp_up_entity = `button.${this._device_norm}_spa_warm`;
-    if (!this.config.temp_down_entity) this.config.temp_down_entity = `button.${this._device_norm}_spa_cool`;
+    // GS5xx defaults: single temp button, so both up/down actions target the same entity.
+    if (!this.config.temp_up_entity) this.config.temp_up_entity = `button.${this._device_norm}_spa_temp`;
+    if (!this.config.temp_down_entity) this.config.temp_down_entity = `button.${this._device_norm}_spa_temp`;
 
-    // sensible defaults for pump and lights control buttons
-    if (!this.config.pump_button_entity) this.config.pump_button_entity = `button.${this._device_norm}_spa_pumps`;
+    // sensible defaults for jets, blower, and lights control buttons
+    if (!this.config.pump_button_entity) this.config.pump_button_entity = `button.${this._device_norm}_spa_jets`;
+    if (!this.config.blower_button_entity) this.config.blower_button_entity = `button.${this._device_norm}_spa_blower`;
     if (!this.config.lights_button_entity) this.config.lights_button_entity = `button.${this._device_norm}_spa_lights`;
 
     // spa mode sensor (tracks current heating mode: eco / standard / sleep)
@@ -219,7 +220,7 @@ class SpaControlCard extends HTMLElement {
     };
 
     setupBtn('#temp_up_btn', this._onTempUp);
-    setupBtn('#temp_down_btn', this._onTempDown);
+    setupBtn('#blower_btn', this._onBlower);
     setupBtn('#set_high_btn', this._onSetHigh);
     setupBtn('#set_low_btn', this._onSetLow);
     setupBtn('#pump_btn', this._onPump);
@@ -330,7 +331,7 @@ class SpaControlCard extends HTMLElement {
         c.style.pointerEvents = this._busy ? 'none' : 'auto';
         c.style.opacity = this._busy ? '0.6' : '1';
       });
-      const roundBtns = this.querySelectorAll('#temp_up_btn,#temp_down_btn');
+      const roundBtns = this.querySelectorAll('#temp_up_btn,#blower_btn');
       roundBtns.forEach(b => b && (b.style.filter = this._busy ? 'grayscale(0.6) opacity(0.8)' : 'none'));
     }
 
@@ -383,14 +384,124 @@ class SpaControlCard extends HTMLElement {
     }
   }
 
+  _isSingleTempConfig() {
+    return !!this.config && this.config.temp_up_entity === this.config.temp_down_entity;
+  }
+
+  async _readSetTempWithRetries(retries = 4, delayMs = 250) {
+    for (let i = 0; i < retries; i++) {
+      const v = this._getNumericState(this._hass.states[this.config.set_entity]);
+      if (v !== null) return Math.round(v);
+      await this._sleep(delayMs);
+    }
+    return null;
+  }
+
+  async _enterSetModeSingleTemp() {
+    await this._hass.callService('button', 'press', { entity_id: this.config.temp_up_entity });
+    await this._sleep(600);
+    return await this._readSetTempWithRetries();
+  }
+
+  async _detectSingleTempDirection(baseTemp) {
+    let previous = baseTemp;
+    for (let i = 0; i < 3; i++) {
+      await this._hass.callService('button', 'press', { entity_id: this.config.temp_up_entity });
+      await this._sleep(450);
+      const next = await this._readSetTempWithRetries();
+      if (next === null || previous === null) continue;
+      const delta = Math.round(next - previous);
+      if (delta !== 0) {
+        return { direction: Math.sign(delta), current: next };
+      }
+      previous = next;
+    }
+    return { direction: 0, current: previous };
+  }
+
+  async _flipSingleTempDirection() {
+    // User-observed behavior: after ~4s out of set mode, re-entering set mode flips direction.
+    await this._sleep(4500);
+    return await this._enterSetModeSingleTemp();
+  }
+
+  async _setToTargetSingleTemp(target) {
+    let current = await this._enterSetModeSingleTemp();
+    if (current === null) return false;
+    if (current === Math.round(target)) return true;
+
+    const maxCycles = 8;
+    const maxPresses = 140;
+    let presses = 0;
+
+    for (let cycle = 0; cycle < maxCycles; cycle++) {
+      const desiredDirection = Math.sign(Math.round(target - current));
+      if (desiredDirection === 0) return true;
+
+      const detected = await this._detectSingleTempDirection(current);
+      if (detected.current !== null) current = detected.current;
+
+      if (detected.direction === 0) {
+        const retry = await this._enterSetModeSingleTemp();
+        if (retry !== null) current = retry;
+        continue;
+      }
+
+      if (detected.direction !== desiredDirection) {
+        const flipped = await this._flipSingleTempDirection();
+        if (flipped !== null) current = flipped;
+        continue;
+      }
+
+      let noChangeCount = 0;
+      while (presses < maxPresses) {
+        if (Math.round(current) === Math.round(target)) return true;
+
+        await this._hass.callService('button', 'press', { entity_id: this.config.temp_up_entity });
+        presses++;
+        await this._sleep(350);
+
+        const next = await this._readSetTempWithRetries();
+        if (next === null) continue;
+
+        const step = Math.round(next - current);
+        if (step === 0) {
+          noChangeCount++;
+          if (noChangeCount >= 2) break;
+          continue;
+        }
+
+        noChangeCount = 0;
+        current = next;
+
+        if (Math.round(current) === Math.round(target)) return true;
+        if (Math.sign(step) !== desiredDirection) {
+          // Likely hit max/min rollover; leave loop and perform direction flip cycle.
+          break;
+        }
+      }
+
+      const flipped = await this._flipSingleTempDirection();
+      if (flipped !== null) current = flipped;
+    }
+
+    return Math.round(current) === Math.round(target);
+  }
+
   async _setToTarget(target) {
     if (this._busy) return;
     this._busy = true;
     this._update();
-    const maxAttempts = 6;
-    const pressDelay = 280;
-    const verifyDelay = 500;
     try {
+      if (this._isSingleTempConfig()) {
+        const ok = await this._setToTargetSingleTemp(target);
+        if (!ok) this._showConfigMessage('Unable to reach desired set temperature');
+        return;
+      }
+
+      const maxAttempts = 6;
+      const pressDelay = 280;
+      const verifyDelay = 500;
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
         const cur = this._getNumericState(this._hass.states[this.config.set_entity]);
         if (cur === null) break;
@@ -401,7 +512,7 @@ class SpaControlCard extends HTMLElement {
         await this._pressButtonNTimes(entityToPress, times, pressDelay);
         await this._sleep(verifyDelay);
       }
-      // final verification
+
       const final = this._getNumericState(this._hass.states[this.config.set_entity]);
       if (final === null || Math.round(final) !== Math.round(target)) {
         this._showConfigMessage('Unable to reach desired set temperature');
@@ -435,11 +546,11 @@ class SpaControlCard extends HTMLElement {
     this._update();
   }
 
-  async _onTempDown() {
+  async _onBlower() {
     if (this._busy) return;
     this._busy = true;
     this._update();
-    try { await this._hass.callService('button', 'press', { entity_id: this.config.temp_down_entity }); } catch (e) { console.warn(e); }
+    try { await this._hass.callService('button', 'press', { entity_id: this.config.blower_button_entity }); } catch (e) { console.warn(e); }
     this._busy = false;
     this._update();
   }

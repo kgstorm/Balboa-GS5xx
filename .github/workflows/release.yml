@@ -81,12 +81,12 @@ jobs:
           tag = os.environ["TAG"]
           md5 = os.environ["MD5"]
           filename = os.environ["FILENAME"]
-          repo = "https://github.com/kgstorm/Balboa-GS100-with-VL260-topside"
+          repo = "https://github.com/kgstorm/Balboa-GS5xx"
 
           pathlib.Path("firmware").mkdir(parents=True, exist_ok=True)
 
           manifest = {
-              "name": "kgstorm.esp32-spa",
+              "name": "kgstorm.balboa-gs5xx",
               "version": version,
               "builds": [
                   {
