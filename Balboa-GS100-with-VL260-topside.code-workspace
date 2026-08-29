@@ -1,0 +1,20 @@
+{
+	"folders": [
+		{
+			"path": "../Balboa-GS100-with-VL260-topside"
+		},
+		{
+			"path": "../VL406"
+		},
+		{
+			"path": "../fake-spa"
+		},
+		{
+			"path": "../BalboaProtocolAnalyzer"
+		},
+		{
+			"path": "."
+		}
+	],
+	"settings": {}
+}

@@ -1,22 +1,27 @@
 # Balboa-GS5xx
 
 <p align="center">
-  <img src="docs/BalboaGS100Controller.png" width="45%" alt="Balboa GS100 Controller" />
-  <img src="docs/BalboaVL260TopsidePanel.png" width="45%" alt="VL260 Topside Panel" />
+  <img src="docs/BalboaGS100Controller.png" width="45%" alt="Balboa GS5xx Controller" />
+  <img src="docs/BalboaVL260TopsidePanel.png" width="45%" alt="Balboa GS5xx Topside Panel" />
 </p>
 
 ## Description
 
-This project adds a Wi-Fi module to Balboa GS5xx-based hot tubs that use a 4-button topside layout with Temp, Blower, Jets, and Lights.
+This project adds a Wi‑Fi module to Balboa GS5xx-based hot tubs that use the 4-button topside layout: Temp, Blower, Jets, and Lights.
 
 ---
 
 ## Purchase Option
 
-Everything you need to know to build a module is contained in this repository. However, I do have some modules available for purchase as well.
+ If have modules available for purchase. If interested, please email me at kevin.storm@gmail.com. 
 
 ---
 
+## PCB and Project Box Fabrication
+
+The PCB and Project Box files are located in the Production directory. I used JLCPCB to order the PCBs. You should be able to easily order your own PCBs from that website with the provided files. 
+
+---
 ## Software Installation
 
 1. Copy the `esp32-spa.yaml` file and the entire `esp32-spa` folder into your Home Assistant config folder under the `esphome/` subfolder. The folder layout should look like:
@@ -43,7 +48,7 @@ config/
 ## Wiring
 
 - An attempt was made with an ESP8266, but the Wi‑Fi and ISR requirements (or pin/boot choices) caused persistent boot issues, so the project uses an ESP32 which worked reliably.
-- The 4 buttons on the topside panel act like switches that connect to 5V when pressed, but when not pressed show ~2.5V. To avoid interfering with the panel we used optocouplers to reproduce the switch signals safely.
+- The 4 buttons on the GS5xx topside panel act like switches that connect to 5V when pressed, but when not pressed show ~2.5V. To avoid interfering with the panel we used optocouplers to reproduce the switch signals safely.
 - For the data and clock lines we use a simple voltage divider (2.2k and 4.7k) to reduce the voltage down to ~3.4V, then add a 220Ω series resistor to the ESP32 GPIOs.
 
 Wiring Diagram:
@@ -92,18 +97,31 @@ If the card doesn't appear immediately, try a hard-refresh (Ctrl/Cmd+Shift+R) or
 
 ## Error Codes
 
-- This integration exposes a `text_sensor` for error codes (sensor.<device name>_spa_error_code). The text sensor shows the 2‑character code from the topside display and a friendly translation when available, for example:
+- This integration exposes a `text_sensor` for error codes (`sensor.<device name>_spa_error_code`). The text sensor shows the 2‑character code from the topside display and a friendly translation when available, for example:
 
   - `HH - high overheat (water temp over 118 F)`
 
 ---
 
-## Heating Mode
+## Home Assistant Entities
 
-This integration exposes a `text_sensor` for the current heating mode (`sensor.<device_name>_spa_mode`). The possible states are **Standard**, **Economy**, and **Sleep**. Standard mode turns the heater and circulation pump on whenever the measured temperature drops below the set temperature. Economy only heats when the circulation pumps are programmed to run. Sleep mode also only heats when the circulation pumps are programmed to run, but also only heats to ~10C/20F below the set temperature. 
+The device exposes the following entities in Home Assistant:
 
-The mode is detected by reading the 7-segment display characters `St`, `Ec`, or `SL` that the Balboa controller briefly shows during mode selection. The device automatically reads the current mode on boot (and every 30 minutes) by pressing the Temp button followed by the Light button.
-
+- `sensor.<device_name>_spa_measured_temp` — current water temperature
+- `sensor.<device_name>_spa_set_temp` — current set temperature
+- `binary_sensor.<device_name>_spa_heater_status` — heater on/off
+- `binary_sensor.<device_name>_spa_pump_status` — pump/jets on/off
+- `binary_sensor.<device_name>_spa_light_status` — light on/off
+- `text_sensor.<device_name>_spa_error_code` — current error code with friendly translation
+- `text_sensor.<device_name>_spa_mode` — current heating mode (`Standard`, `Economy`, `Sleep`)
+- `sensor.<device_name>_spa_filter_mode` — current filter mode
+- `select.<device_name>_spa_filter_cycle` — filter cycle selector
+- `select.<device_name>_spa_display_unit` — temperature unit selector (`°C` / `°F`)
+- `select.<device_name>_spa_heating_mode` — heating mode selector (`Standard`, `Economy`, `Sleep`)
+- `button.<device_name>_spa_temp` — virtual temp button press
+- `button.<device_name>_spa_lights` — virtual lights button press
+- `button.<device_name>_spa_jets` — virtual jets button press
+- `button.<device_name>_spa_blower` — virtual blower button press
 
 ### Example Home Assistant automation (mobile push notification)
 
