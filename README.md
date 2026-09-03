@@ -1,13 +1,12 @@
 # Balboa-GS5xx
 
 <p align="center">
-  <img src="docs/BalboaGS100Controller.png" width="45%" alt="Balboa GS5xx Controller" />
-  <img src="docs/BalboaVL260TopsidePanel.png" width="45%" alt="Balboa GS5xx Topside Panel" />
+  <img src="docs/tempButton.jpeg" width="50%" alt="Topside Panel" />
 </p>
 
 ## Description
 
-This project adds a Wi‑Fi module to Balboa GS5xx-based hot tubs that use the 4-button topside layout: Temp, Blower, Jets, and Lights.
+This project adds a Wi‑Fi module to any hot tubs that uses the Balboa 4-button topside controller with this layout: Temp, Blower, Jets, and Lights.
 
 ---
 
