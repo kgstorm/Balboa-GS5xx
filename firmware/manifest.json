@@ -1,14 +1,14 @@
 {
   "name": "kgstorm.balboa-gs5xx",
-  "version": "3.0",
+  "version": "3.1",
   "builds": [
     {
       "chipFamily": "ESP32",
       "ota": {
-        "md5": "4e8822cc011afdd4bcb5dcc9f4b2d155",
-        "path": "esp32-spa-3.0.bin",
+        "md5": "843dd741f1bd160ec734b9769ade02f2",
+        "path": "esp32-spa-3.1.bin",
         "summary": "See release notes for details.",
-        "release_url": "https://github.com/kgstorm/Balboa-GS5xx/releases/tag/v3.0"
+        "release_url": "https://github.com/kgstorm/Balboa-GS5xx/releases/tag/v3.1"
       }
     }
   ]
